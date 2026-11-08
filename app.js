@@ -139,7 +139,8 @@
     if (!f) return;
     var year = new Date().getFullYear();
     f.innerHTML =
-      '<div>生物竞赛作战台 · BioLab　<span class="faint">静态站点雏形 v0.1</span></div>' +
+      '<div>生物竞赛作战台 · BioLab　<span class="faint">v0.6</span><br>' +
+      '<a href="setup.html" style="font-size:12px">账号与云同步配置</a></div>' +
       '<div class="faint" style="max-width:420px">本站为个人学习辅助资源站，非官方平台。' +
       "所有赛制、时间、名额信息以<b>中国动物学会 / 中国植物学会</b>及本省竞赛分会的正式通知为准。" +
       "　© " + year + "</div>";

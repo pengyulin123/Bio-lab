@@ -10,7 +10,8 @@
    配合行级安全（RLS）才安全。绝对不要把 service_role key 放进来。
    ========================================================= */
 window.SUPABASE_CONFIG = {
-  url: "https://vzejancejkujekojxtey.supabase.co",
-  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ6ZWphbmNlamt1amVrb2p4dGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQxMDk0NjQsImV4cCI6MjEwOTY4NTQ2NH0.yHCgZXNbuIA72ndduzCFcGN-f6dMGJjwPsgbaMkLuh4",
-  table: "user_data"
+  url: "",          // 例如 https://abcdefghijkl.supabase.co
+  anonKey: "",      // 例如 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....
+
+  table: "user_data"   // 建表脚本里的表名，一般不用改
 };

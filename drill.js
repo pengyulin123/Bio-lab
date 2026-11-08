@@ -215,10 +215,43 @@
   function rebuildQuestions() {
     QUESTIONS = BUILTIN.concat(CUSTOM);
   }
-  function validQ(q) {
-    return q && typeof q.stem === "string" && q.stem.trim() &&
-      Array.isArray(q.opts) && q.opts.length === 4 &&
-      q.opts.every(function (o) { return o && typeof o.t === "string" && /^[TF]$/i.test(String(o.a)); });
+  /* 把各种写法的题目统一成标准结构；失败时返回原因 */
+  function normalizeQ(q) {
+    if (!q || typeof q !== "object") return { err: "不是对象" };
+
+    var stem = q.stem || q.question || q.title || q.q || q.content || "";
+    if (typeof stem !== "string" || !stem.trim()) return { err: "缺少题干（stem / question）" };
+
+    var raw = q.opts || q.options || q.choices || q.items || q.answers || [];
+    if (!Array.isArray(raw)) return { err: "选项不是数组（opts / options）" };
+    if (raw.length !== 4) return { err: "选项有 " + raw.length + " 个，需要 4 个" };
+
+    var norm = [];
+    for (var i = 0; i < 4; i++) {
+      var o = raw[i];
+      var text = "", ans = "";
+      if (typeof o === "string") {
+        text = o;
+        ans = normTF(q["a" + (i + 1)] || q["answer" + (i + 1)] || "");
+      } else if (o && typeof o === "object") {
+        text = o.t || o.text || o.content || o.label || o.option || "";
+        ans = normTF(o.a != null ? o.a : (o.answer != null ? o.answer : o.correct));
+      }
+      if (!text) return { err: "第 " + (i + 1) + " 个选项没有文字（t / text）" };
+      if (!ans) return { err: "第 " + (i + 1) + " 个选项的答案不是 T/F（现在写的是「" +
+        (o && o.a != null ? o.a : "") + "」）" };
+      norm.push({ t: String(text).trim(), a: ans });
+    }
+
+    return {
+      q: {
+        topic: q.topic || q.subject || q.category || "导入题目",
+        stem: stem.trim(),
+        opts: norm,
+        exp: q.exp || q.explain || q.explanation || q.analysis || "（无解析）",
+        kw: q.kw || q.keyword || q.tag || ""
+      }
+    };
   }
   var state = { graded: false };
 
@@ -360,9 +393,17 @@
   var OPT_RE = /^\s*([A-Da-d])\s*[.、)．]\s*(.+?)\s*[（(]\s*([TFtf对错✓✗])\s*[)）]\s*$/;
   var EXP_RE = /^\s*(?:解析|说明|答)\s*[:：]\s*(.*)$/;
 
-  function normTF(ch) {
-    if (/[Tt对✓]/.test(ch)) return "T";
-    return "F";
+  function normTF(v) {
+    if (v === true) return "T";
+    if (v === false) return "F";
+    var s = String(v == null ? "" : v).trim();
+    if (!s) return "";
+    var u = s.toUpperCase();
+    if (u === "T" || u === "TRUE" || u === "1" || u === "Y" || u === "YES" ||
+        s === "对" || s === "正确" || s === "是" || s === "√" || s === "✓") return "T";
+    if (u === "F" || u === "FALSE" || u === "0" || u === "N" || u === "NO" ||
+        s === "错" || s === "错误" || s === "否" || s === "×" || s === "✗") return "F";
+    return "";
   }
 
   /* 解析纯文本题目：题干 + A-D 四个选项（每项末尾标 T/F），可选「解析：」 */
@@ -411,29 +452,23 @@
   }
 
   function addQuestions(arr) {
-    var added = 0;
-    arr.forEach(function (q) {
-      if (!validQ(q)) return;
-      CUSTOM.push({
-        topic: q.topic || "导入题目",
-        stem: String(q.stem).trim(),
-        opts: q.opts.map(function (o) { return { t: String(o.t), a: normTF(o.a) }; }),
-        exp: q.exp || "（无解析）",
-        kw: q.kw || ""
-      });
-      added++;
+    var ok = 0, fail = [];
+    (arr || []).forEach(function (raw, i) {
+      var r = normalizeQ(raw);
+      if (r.err) { fail.push("第 " + (i + 1) + " 题：" + r.err); return; }
+      CUSTOM.push(r.q);
+      ok++;
     });
-    saveCustom();
-    rebuildQuestions();
-    return added;
+    if (ok) { saveCustom(); rebuildQuestions(); }
+    return { ok: ok, fail: fail };
   }
 
-  function resetQuiz() {
-    state.graded = false;
-    var gb = document.getElementById("gradeBtn");
-    if (gb) gb.textContent = "提交判分";
-    var sn = document.getElementById("scoreNum");
-    if (sn) sn.innerHTML = "—";
+  function reportResult(res) {
+    if (!res.fail.length) { toastMsg("成功导入 " + res.ok + " 道题"); return; }
+    var detail = res.fail.slice(0, 3).join("\n");
+    if (res.fail.length > 3) detail += "\n…还有 " + (res.fail.length - 3) + " 条";
+    alert("导入 " + res.ok + " 道，失败 " + res.fail.length + " 道\n\n" + detail +
+      "\n\n要求：每题 4 个选项，答案写 T/F（也接受 true/false、对/错、1/0）。");
   }
 
   function renderBank() {
@@ -489,10 +524,10 @@
       if (!txt.trim()) { toastMsg("先粘贴题目"); return; }
       var qs = parseTextFormat(txt);
       if (!qs.length) { alert("没解析出题目。\n每道题需要：题干一行，然后 A-D 四个选项，每项末尾用 (T) 或 (F) 标注。"); return; }
-      var n = addQuestions(qs);
+      var res = addQuestions(qs);
       document.getElementById("bankText").value = "";
       renderBank(); resetQuiz(); build(); updateAnswered();
-      toastMsg("导入 " + n + " 道题");
+      reportResult(res);
     });
 
     var fileBtn = document.getElementById("bankFile");
@@ -506,12 +541,21 @@
         r.onload = function () {
           try {
             var data = JSON.parse(r.result);
-            if (!Array.isArray(data)) throw new Error("not array");
-            var n = addQuestions(data);
+            if (!Array.isArray(data)) {
+              var keys = ["questions", "items", "list", "data"];
+              for (var ki = 0; ki < keys.length; ki++) {
+                if (data && Array.isArray(data[keys[ki]])) { data = data[keys[ki]]; break; }
+              }
+            }
+            if (!Array.isArray(data)) throw new Error("not-array");
+            if (!data.length) { alert("这个文件里没有题目（数组是空的）"); return; }
+            var res = addQuestions(data);
             renderBank(); resetQuiz(); build(); updateAnswered();
-            toastMsg("导入 " + n + " 道题");
+            reportResult(res);
           } catch (err) {
-            alert("JSON 格式不对。应该是一个数组，每项含 topic / stem / opts / exp。");
+            alert("文件不是合法 JSON，或结构不对。\n\n正确结构是数组：\n" +
+              '[{"stem":"题干","opts":[{"t":"选项1","a":"T"},{"t":"选项2","a":"F"},' +
+              '{"t":"选项3","a":"T"},{"t":"选项4","a":"F"}],"exp":"解析"}]');
           }
         };
         r.readAsText(f);
