@@ -15,3 +15,11 @@ window.SUPABASE_CONFIG = {
 
   table: "user_data"   // 建表脚本里的表名，一般不用改
 };
+
+// 登录弹窗的密码找回增强独立维护，所有引用此配置的页面都会启用。
+(function () {
+  var script = document.createElement("script");
+  script.src = "account-recovery.js";
+  script.async = true;
+  document.head.appendChild(script);
+})();
